@@ -1,0 +1,4 @@
+interface:
+  display_name: "语音视频制作"
+  short_description: "根据音频与SRT自动制作并严格验收高质量视频号短视频"
+  default_prompt: "Use $audio-video-production to create a verified short video from my audio and SRT files."
