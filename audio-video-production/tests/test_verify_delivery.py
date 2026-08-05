@@ -54,9 +54,12 @@ def make_video(ffmpeg: str, path: Path, audio: Path | None, size: str = "1280x72
     subprocess.run(command, check=True)
 
 
-def run_cli(video: Path, audio: Path, report: Path) -> subprocess.CompletedProcess[str]:
+def run_cli(video: Path, audio: Path, report: Path, review: Path | None = None) -> subprocess.CompletedProcess[str]:
+    command = [sys.executable, str(SCRIPT), "--video", str(video), "--source-audio", str(audio), "--report", str(report)]
+    if review:
+        command += ["--review", str(review)]
     return subprocess.run(
-        [sys.executable, str(SCRIPT), "--video", str(video), "--source-audio", str(audio), "--report", str(report)],
+        command,
         text=True,
         capture_output=True,
         check=False,
@@ -137,6 +140,43 @@ class VerifyDeliveryTests(unittest.TestCase):
             result = run_cli(video, audio, report)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("subtitle", result.stderr.lower())
+
+    def test_incomplete_manual_review_fails_when_review_is_required(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            audio, video, report, review = root / "a.wav", root / "v.mp4", root / "r.json", root / "review.json"
+            write_wav(audio, 1.0)
+            make_video(self.ffmpeg, video, audio)
+            review.write_text(json.dumps({"approved": True, "checks": {"captions": True}}), encoding="utf-8")
+            result = run_cli(video, audio, report, review)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review missing checks", result.stderr.lower())
+
+    def test_complete_manual_review_allows_delivery(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            audio, video, report, review = root / "a.wav", root / "v.mp4", root / "r.json", root / "review.json"
+            write_wav(audio, 1.0)
+            make_video(self.ffmpeg, video, audio)
+            review.write_text(
+                json.dumps(
+                    {
+                        "approved": True,
+                        "checks": {
+                            "no_burned_captions": True,
+                            "subtitle_safe_area": True,
+                            "background_text": True,
+                            "scene_midpoints": True,
+                            "transition_boundaries": True,
+                            "opening_and_ending": True,
+                            "video_motion": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_cli(video, audio, report, review)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

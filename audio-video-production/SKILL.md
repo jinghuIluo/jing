@@ -1,52 +1,50 @@
 ---
 name: audio-video-production
-description: Use when the user provides an audio file and matching SRT and asks to create, storyboard, package, render, or verify an audio-led short video, especially for 视频号, HyperFrames, online image/video sourcing, no burned captions, or a reserved subtitle-safe area.
+description: Use when audio plus matching SRT must become a storyboarded, packaged, rendered, or verified short video, especially when visual style, template matching, subtitle-safe layout, HyperFrames, Remotion, source assets, or final delivery checks matter.
 ---
 
 # 语音视频制作
 
-## 核心原则
+以音频为唯一时间基准，SRT 只作语义定位，不烧录完整字幕。成片不仅要技术合格，还必须通过模板匹配、素材预算、运行时预检和可追溯视觉复核。
 
-以音频为唯一总时间基准，以 SRT 作为语义定位，不把字幕烧录进画面。先建立可追溯分镜和本地素材，再制作、渲染和逐项验收；技术检查与视觉检查全部通过后才交付。
+## 强制前置
 
-**REQUIRED SUB-SKILLS:** Use `hyperframes:hyperframes`, `hyperframes:hyperframes-cli`, and `browser:control-in-app-browser` when available. Do not ask whether to use them. If a required capability is unavailable, state the concrete limitation instead of pretending the work is complete.
-
-## 开始前
-
-确认音频与 SRT 路径。默认采用 `standard` 质量档位、16:9、1280×720、30fps、H.264/AAC；用户明确指定的平台、比例、分辨率、风格或预览门槛优先。
-
-用户未指定视觉风格，或明确让你整体规划时，根据内容类型自动选择视觉身份并继续，不得仅因缺少主色、参考图、Logo或风格名称而暂停询问。
-
-仅在收费服务、明确的预览确认、音频与 SRT 不匹配、或会造成明显返工的规格变化时暂停询问。
-
-## 工作流
-
-1. 创建独立任务目录和 `job-manifest.json`，保存输入路径、哈希、规格、阶段、素材、动态区间和版本。
-2. 运行输入分析：
+1. 确认音频/SRT；默认 `standard`、16:9、1280×720、30fps、H.264/AAC。运行 `scripts/analyze_inputs.py`。
+2. 建立独立任务目录与 `job-manifest.json`，记录哈希、规格、版本、渲染器、素材、动态区间和阶段。
+3. 写 `DESIGN.md`、`template-match.md` 和 `shot-plan.json`。模板匹配必须写明视觉身份、选用模板、禁用元素、素材预算和拒绝理由；执行：
 
 ```bash
-python3 scripts/analyze_inputs.py --audio <audio> --srt <srt> --output-dir <project>/analysis
+python3 scripts/validate_production_plan.py --plan <project>/shot-plan.json --profile standard
 ```
 
-3. 阅读 `analysis/input-report.json` 和候选分镜，结合完整 SRT 建立宏观章节与微观镜头。遵循 [visual-contract.md](references/visual-contract.md)。
-4. 使用浏览器搜索来源明确的官方、图库或公共素材。必须同时规划图片和视频；下载本地并记录来源页、直接地址、访问日期、用途、授权状态和 SHA-256。
-5. 将数字信息标记为“已核验事实 / 合理推断 / 个人观点”。只有已核验事实才能制作强化数据卡。
-6. 按 [production-workflow.md](references/production-workflow.md) 创建 HyperFrames 工程。计时视频必须是主画布直接子元素、带唯一 ID、静音、固定帧率且不能被静态层遮挡。
-7. 运行 HyperFrames `lint`、`validate` 和覆盖章节中点、转场边界的 `inspect`；制作关键帧联系表并逐张查看。
-8. 渲染到新的 `final-vNN.mp4`，不得覆盖旧合格版本。运行：
+4. 选择一个最终渲染器并记录理由：用户指定或已有工程时沿用；否则优先 HyperFrames。用户指定 Remotion 时使用 Remotion。HyperFrames 可用时必须阅读 `hyperframes:hyperframes` 和 `hyperframes:hyperframes-cli`；使用 Remotion 时必须阅读相应 Remotion Skill。模板参考或部分试验不算作该渲染器已交付。
+5. 素材搜索需要外部素材时，使用 `browser:control-in-app-browser`；下载本地、验证可解码并记录来源、直接地址、日期、许可和 SHA-256。先满足素材预算再进入渲染。
+6. 运行本地预检，不等待浏览器自动下载：
 
 ```bash
-python3 scripts/verify_delivery.py --video <video> --source-audio <audio> --manifest <manifest> --report <report>
+python3 scripts/preflight_runtime.py --renderer <hyperframes|remotion> --report <project>/analysis/runtime-preflight.json
 ```
 
-9. 技术报告通过后，人工确认：无烧录字幕、底部安全区无关键信息、背景文字不干扰、视频确实运动、无闪帧/空白/异常裁切、开头和结尾完整。通过后再更新 `approved.mp4`。
+本机 Chrome 可通过 `PRODUCER_HEADLESS_SHELL_PATH` 指定。先渲染短 smoke clip，再按可用内存确定全片并发；smoke 失败时不得启动全片。
+
+## 生产与验收
+
+- 按 `references/visual-contract.md` 设计宏观章节与微观镜头；按 `references/production-workflow.md` 建工程、素材和版本。
+- 每段计时视频必须在 `shot-plan.json` 声明时间线与源素材的入/出点；不得自动循环、冻结或超出源窗口。
+- 仅将已核验事实做成强化数据卡。合理推断与个人观点不得伪装为数据事实。
+- 最终渲染到新的 `final-vNN.mp4`，保留旧合格版本。
+- 技术验收后，生成并填写 `review.json`；未完成全部人工项不可批准：
+
+```bash
+python3 scripts/verify_delivery.py --video <video> --source-audio <audio> --manifest <manifest> --review <project>/delivery/review.json --report <report>
+```
+
+只有上述命令通过，且关键帧联系表已逐张看过，才生成不可变 `approved-vNN.mp4`；如需要 `approved.mp4`，它只作为指向当前批准版的别名。
 
 ## 质量档位
 
-- `fast`：减少素材数量和视觉变化，不降低事实、同步、编码与安全区门槛。
-- `standard`：默认；实景为主，信息卡为辅，检查全部章节和转场。
-- `premium`：更多高分辨率动态素材、更密微观分镜、逐场景视觉复核。
+- `fast`：减少镜头，但不降低同步、安全区、事实和验收标准。
+- `standard`：至少 3 个独立实景来源、实景时长目标 40% 以上；无法满足时在计划中写明许可或解码例外。
+- `premium`：至少 5 个独立实景来源、实景时长目标 60% 以上；逐场景复核。
 
-## 完成交付
-
-交付 MP4、独立 SRT、HyperFrames 工程、分镜、`job-manifest.json`、素材来源清单、技术报告和关键帧联系表。任何硬性检查失败、动态素材被遮挡、或视觉检查未完成时，继续修正，不得宣告完成。
+无烧录字幕、底部安全区、无可见网格、无模板名/时间码是硬约束。具体字段、命令和复核样例见 [runtime-and-review.md](references/runtime-and-review.md)。

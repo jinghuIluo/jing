@@ -142,12 +142,42 @@ def check_motion_windows(
     checks["motion_windows"] = motion_results
 
 
+REVIEW_CHECKS = (
+    "no_burned_captions",
+    "subtitle_safe_area",
+    "background_text",
+    "scene_midpoints",
+    "transition_boundaries",
+    "opening_and_ending",
+    "video_motion",
+)
+
+
+def check_manual_review(review_path: Path, errors: list[str], checks: dict[str, Any]) -> None:
+    try:
+        review = json.loads(review_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"review could not be read: {exc}")
+        return
+    review_checks = review.get("checks")
+    if not isinstance(review_checks, dict):
+        errors.append("review missing checks")
+        return
+    missing = [name for name in REVIEW_CHECKS if review_checks.get(name) is not True]
+    if missing:
+        errors.append(f"review missing checks: {', '.join(missing)}")
+    if review.get("approved") is not True:
+        errors.append("review is not approved")
+    checks["manual_review"] = {"approved": review.get("approved") is True, "completed_checks": sorted(name for name in REVIEW_CHECKS if review_checks.get(name) is True)}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--video", type=Path, required=True)
     parser.add_argument("--source-audio", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--review", type=Path)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--fps", type=float, default=30.0)
@@ -218,14 +248,17 @@ def main() -> int:
                 errors.append("ffmpeg not found; motion verification cannot run")
             else:
                 check_motion_windows(args.manifest, args.video, ffmpeg, ffprobe, errors, checks)
-        warnings.extend(
-            [
-                "Manual check required: no burned captions are visible.",
-                "Manual check required: bottom subtitle-safe area remains unobstructed.",
-                "Manual check required: background text does not interfere with foreground copy.",
-                "Manual check required: scene midpoints and transition boundaries were visually reviewed.",
-            ]
-        )
+        if args.review:
+            check_manual_review(args.review, errors, checks)
+        else:
+            warnings.extend(
+                [
+                    "Manual check required: no burned captions are visible.",
+                    "Manual check required: bottom subtitle-safe area remains unobstructed.",
+                    "Manual check required: background text does not interfere with foreground copy.",
+                    "Manual check required: scene midpoints and transition boundaries were visually reviewed.",
+                ]
+            )
     except (RuntimeError, OSError, ValueError, json.JSONDecodeError) as exc:
         errors.append(str(exc))
 
