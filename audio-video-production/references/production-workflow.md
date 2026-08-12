@@ -2,167 +2,88 @@
 
 ## 1. 任务清单
 
-每次创建全新任务目录，不复用上个选题的素材或事实。建立 `job-manifest.json`：
+每次创建全新任务目录，不复用上个选题的素材或事实。最小 `job-manifest.json`：
 
 ```json
 {
-  "inputs": {
-    "audio_path": "",
-    "audio_sha256": "",
-    "srt_path": "",
-    "srt_sha256": ""
-  },
-  "output_spec": {
-    "platform": "视频号",
-    "width": 1280,
-    "height": 720,
-    "fps": 30,
-    "video_codec": "h264",
-    "audio_codec": "aac"
-  },
+  "inputs": {"audio_path": "", "audio_sha256": "", "srt_path": "", "srt_sha256": ""},
+  "output_spec": {"platform": "视频号", "width": 1280, "height": 720, "fps": 30, "video_codec": "h264", "audio_codec": "aac"},
   "quality_profile": "standard",
   "safe_area_ratio": 0.16,
-  "stages": {
-    "input_checked": false,
-    "storyboard_ready": false,
-    "assets_ready": false,
-    "project_validated": false,
-    "rendered": false,
-    "visually_reviewed": false,
-    "approved": false
-  },
-  "scenes": [],
+  "renderer": null,
+  "runtime_preflight": null,
+  "font_strategy": null,
+  "template_match": null,
+  "shot_plan": null,
+  "stages": {"input_checked": false, "storyboard_ready": false, "assets_ready": false, "project_validated": false, "rendered": false, "visually_reviewed": false, "approved": false},
   "assets": [],
   "motion_windows": [],
   "render_versions": [],
   "approved_output": null,
+  "manual_review": null,
   "preview_confirmation_required": false
 }
 ```
 
-每完成一个阶段即更新清单。恢复任务时先核对输入哈希；哈希变化时重新分析时间轴。
+每完成一个阶段即更新清单。恢复任务时先核对输入哈希；哈希变化时重新分析时间轴。批准版使用不可变 `approved-vNN.mp4`；`approved.mp4` 只在明确需要时更新为别名。
 
-## 2. 输入与语义分镜
+## 2. 输入、模板与镜头计划
 
-运行 `scripts/analyze_inputs.py`。修复或暂停处理以下问题：
+运行 `scripts/analyze_inputs.py`。暂停或修复：音频无法解码、SRT 为空/倒序/重叠、说话人格式异常、SRT 明显超出音频。
 
-- 音频无法解码。
-- SRT 为空、倒序、重叠或明显超过音频。
-- 说话人与文本格式异常。
-- SRT 结尾与音频相差过大，疑似不是同一版本。
-
-将候选段落重写为分镜表：
+先写 `DESIGN.md`、`template-match.md` 和 `shot-plan.json`，再建立分镜表：
 
 | 时间 | 语义功能 | 观众问题 | 视觉目的 | 素材类型 | 搜索词 | 来源 | 状态 |
 |---|---|---|---|---|---|---|---|
 
-语义功能使用：冲突、论据、反驳、解释、案例、情绪、转折、结论、CTA。不要按每条字幕机械切镜。
+模板匹配必须写出选用模板、禁用元素与拒绝的视觉方向。`shot-plan.json` 的视频镜头必须声明时间线与源素材入/出点；运行 `scripts/validate_production_plan.py` 后才能将 `assets_ready` 标为 true。字段见 [runtime-and-review.md](runtime-and-review.md)。
 
-## 3. 事实边界
+## 3. 事实与素材
 
-对所有准备上屏的数字和具体声明分类：
+把准备上屏的数字和具体声明分类为：已核验事实、合理推断、个人观点。只有已核验事实可以成为强化数据卡；找不到依据时保留口播原观点，但不额外伪装成权威数字。
 
-- 已核验事实：由官方页面、原始文件、法规或可信一手来源直接支持；允许制作数据卡。
-- 合理推断：来源提供事实基础，但结论由制作方推导；使用“可能、意味着、可以理解为”等判断表达。
-- 个人观点：作为角色立场呈现，不添加权威外观。
+素材优先：官方/机构、许可清晰图库、必要新闻引用。仅在语义需要时使用照片；不要为了满足形式塞入无关图片。下载后验证文件类型、尺寸、时长和可解码性，记录来源页、直接地址、访问日期、用途、许可和 SHA-256。
 
-找不到可靠依据时保留音频原观点，但不要额外放大成醒目的事实数据卡。来源记录须包含页面标题、来源页、直接素材地址、访问日期和本地哈希。
-
-## 4. 浏览器素材获取
-
-优先顺序：
-
-1. 品牌、机构、政府或项目官方发布素材。
-2. Pexels 等来源和许可清晰的图库或视频库。
-3. 新闻报道中的必要引用画面。
-
-优先横屏、彩色、无水印、主体有裁切空间的素材。不得把搜索结果缩略图当成最终素材。下载本地后验证文件类型、尺寸、时长和可解码性。
-
-视频优先1080P，最低目标720P；找不到替代品时允许降级并在报告中说明。进入 HyperFrames 前统一固定帧率，关键帧最大间隔约1秒：
+视频优先 1080P、最低 720P。进入最终渲染器前统一固定帧率、关键帧最大间隔约 1 秒：
 
 ```bash
 ffmpeg -i input.mp4 -c:v libx264 -r 30 -g 30 -keyint_min 30 -sc_threshold 0 -pix_fmt yuv420p -movflags +faststart -an output.mp4
 ```
 
-不要无限循环短视频。使用一次后回到合适的静态或图形画面。
+禁止让时间线视频长于源窗口。需要冻结、循环或替换时，写成新的镜头决策，不得静默延长。
 
-## 5. HyperFrames 工程
+## 4. 渲染器与预检
 
-读取当前版本的 HyperFrames 主 Skill 和 CLI Skill，不复制可能过期的命令说明。
-
-强制结构：
-
-- 对话音频为独立音轨，覆盖全片。
-- SRT 不作为可见字幕节点。
-- 计时视频是主画布的直接子元素，具有唯一、稳定 ID，设置 `muted`。
-- 不把带 `data-start` 的视频嵌套在另一个计时元素中。
-- 检查视频层级，避免被静态背景遮住。
-- 每轨不超过5个计时元素；超过8个宏观章节时拆分子 Composition。
-- 所有可见元素有确定性进入动画；避免无限循环和不可复现随机动画。
-- GSAP、中文字体等关键依赖使用本地固定版本；正式渲染不依赖远程 CDN。
-
-运行并修正：
+用户指定或已有工程决定最终渲染器；没有约束时优先 HyperFrames。模板参考、局部试验与最终渲染器要明确区分。运行：
 
 ```bash
-hyperframes lint
-hyperframes validate
-hyperframes inspect --samples <覆盖章节与转场的数量>
+python3 scripts/preflight_runtime.py --renderer <hyperframes|remotion> --report <project>/analysis/runtime-preflight.json
 ```
 
-零错误是硬门槛。布局重叠、越界和媒体结构警告必须处理；仅属文件拆分建议且不影响输出的警告可记录，但不得掩盖真实风险。
+使用本机浏览器路径或 `PRODUCER_HEADLESS_SHELL_PATH`，不要依赖渲染时自动下载 Chrome。先完成短 smoke render，再根据可用内存设置全片并发。
 
-## 6. 预览、版本和恢复
+### HyperFrames
 
-文件命名：
+读取当前 HyperFrames 主 Skill 和 CLI Skill。对话音频为独立全片轨；SRT 不作为可见字幕节点；计时视频是主画布直接子元素、唯一稳定 ID、静音且不被静态背景遮住。运行 `lint`、`validate`、`inspect`，零错误后再渲染。
 
-```text
-renders/
-├── preview-v01.mp4
-├── final-v01.mp4
-├── final-v02.mp4
-└── approved.mp4
+### Remotion
+
+读取当前 Remotion 创建、渲染、媒体与字幕 Skill。音频为独立全片轨；公开素材只从 `public/` 读取；先执行 composition/build 与 smoke render。不要以编译通过代替正式渲染验证。
+
+## 5. 预览、版本与验收
+
+用户要求预览确认时，先渲染预览、等待确认；未要求则直接正式渲染。渲染失败时保留上个合格版本，不删除输入、来源、工程、SRT 或旧成片。
+
+渲染为新的 `final-vNN.mp4` 后先运行技术验收。`motion_windows` 必须以源素材与成片同一区域的不同帧验证真实运动，不能用文字动画冒充视频运动。
+
+技术工具无法可靠确认无烧录字幕、安全区、背景文字、语义、转场、首尾完整性。制作关键帧联系表并实际查看，然后填写 `delivery/review.json`：
+
+```bash
+python3 scripts/verify_delivery.py --video <video> --source-audio <audio> --manifest <manifest> --review <project>/delivery/review.json --report <report>
 ```
 
-用户明确要求先看预览时：渲染预览、等待确认，确认前不制作正式成片。未要求预览时直接制作正式版本。
+这条命令通过前不得批准。通过后创建 `approved-vNN.mp4`，更新清单路径、哈希和技术报告；需要时再更新 `approved.mp4` 别名。
 
-渲染失败时保留上一个合格版本。只清理本任务明确生成且已确认无用的临时目录；不得删除用户输入、素材来源、工程、SRT或旧合格成片。
+## 6. 暂停确认
 
-## 7. 验收
-
-先运行 `scripts/verify_delivery.py`，再做视觉检查。`motion_windows` 每项至少包含：
-
-```json
-{
-  "start": 204.99,
-  "end": 217.19,
-  "source_path": "assets/broll.mp4",
-  "source_start": 0,
-  "region": [0, 0, 1280, 720]
-}
-```
-
-动态验证同时比较源素材和成片对应区域，防止静态遮挡，也防止把文字动画误判为视频运动。
-
-技术工具无法可靠确认以下条件，必须实际看关键帧或播放片段：
-
-- 是否烧录字幕。
-- 底部安全区是否侵入人物面部、关键信息或大字。
-- 背景原图中的文字是否干扰前景。
-- 语义是否与音频对应。
-- 转场是否闪白、黑帧或突兀。
-
-全部通过后，将新版本复制或更新为 `approved.mp4`，并在清单中记录最终路径和哈希。
-
-## 8. 暂停确认
-
-仅在以下情况暂停：
-
-- 将调用收费图片、视频、数字人、TTS或云渲染服务。
-- 用户明确要求预览确认。
-- 音频与 SRT 疑似不同版本。
-- 输出平台、比例、清晰度或时长要求发生会造成明显返工的改变。
-- 缺失关键素材，继续制作会改变表达方向。
-
-免费网络检索、本地下载、可逆工程创建和本地验证无需重复询问。
-
-缺少视觉风格不构成暂停条件。用户未指定时，依据内容类型自动确定明暗、色彩、字体气质和实景/图形比例，写入项目 `DESIGN.md` 后继续。
+仅在收费服务、用户明确要求预览、音频与 SRT 疑似不同版本、输出规格会造成明显返工、或缺失关键素材会改变表达方向时暂停。缺少视觉风格不构成暂停条件；选择视觉身份后写入 `DESIGN.md` 并继续。
