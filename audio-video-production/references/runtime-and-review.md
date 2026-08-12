@@ -53,6 +53,7 @@
   "checks": {
     "no_burned_captions": true,
     "subtitle_safe_area": true,
+    "text_contrast": true,
     "background_text": true,
     "scene_midpoints": true,
     "transition_boundaries": true,
