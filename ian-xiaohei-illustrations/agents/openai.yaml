@@ -1,0 +1,6 @@
+interface:
+  display_name: "Ian 本人怪诞配图"
+  short_description: "用 Ian 本人卡通 IP 生成怪诞清爽的中文正文配图"
+  default_prompt: "Use $ian-xiaohei-illustrations to 为这篇中文文章设计并生成几张 Ian 本人卡通 IP 的怪诞正文配图。"
+policy:
+  allow_implicit_invocation: true
